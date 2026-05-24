@@ -1,7 +1,15 @@
-"""HTTP-клиент GREEN API для мессенджера MAX.
+"""HTTP-клиент GREEN API.
+
+Зелёное API использует per-instance host: `https://{xxxx}.api.green-api.com`,
+где `xxxx` — первые 4 цифры `idInstance`. Префикс пути для всех инстансов —
+`waInstance` (это нотация самого API, не имеет отношения к выбранному
+мессенджеру — MAX, WhatsApp и т.д.).
 
 Эндпоинт строится по шаблону:
-    {apiUrl}/maxInstance{idInstance}/{method}/{apiTokenInstance}
+    {apiUrl}/waInstance{idInstance}/{method}/{apiTokenInstance}
+
+Если `api_url` не задан (или указан как корневой `https://api.green-api.com`),
+он автоматически достраивается до хоста инстанса.
 """
 
 from __future__ import annotations
@@ -12,13 +20,29 @@ from dataclasses import dataclass
 import requests
 
 
+_DEFAULT_HOST = "https://api.green-api.com"
+
+
 @dataclass
 class GreenApiConfig:
     id_instance: str
     api_token: str
-    api_url: str = "https://api.green-api.com"
-    instance_prefix: str = "maxInstance"
+    api_url: str = ""               # пусто → автоопределение по id_instance
+    instance_prefix: str = "waInstance"
     timeout: int = 20
+
+    def resolved_api_url(self) -> str:
+        """Возвращает реальный хост для запросов.
+
+        Если пользователь оставил поле пустым или указал корневой хост, и
+        `idInstance` начинается минимум с 4 цифр — собираем
+        `https://{xxxx}.api.green-api.com`.
+        """
+        url = (self.api_url or "").strip().rstrip("/")
+        digits = "".join(ch for ch in self.id_instance if ch.isdigit())
+        if (not url or url == _DEFAULT_HOST) and len(digits) >= 4:
+            return f"https://{digits[:4]}.api.green-api.com"
+        return url or _DEFAULT_HOST
 
 
 class GreenApiError(Exception):
@@ -33,7 +57,8 @@ class GreenApiClient:
 
     def _url(self, method: str) -> str:
         c = self.config
-        return f"{c.api_url.rstrip('/')}/{c.instance_prefix}{c.id_instance}/{method}/{c.api_token}"
+        host = c.resolved_api_url()
+        return f"{host}/{c.instance_prefix}{c.id_instance}/{method}/{c.api_token}"
 
     @staticmethod
     def normalize_phone(raw: str) -> str:

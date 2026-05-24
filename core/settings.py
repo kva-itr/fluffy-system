@@ -13,7 +13,7 @@ SETTINGS_FILE = Path.home() / ".max_group_inviter.json"
 class Settings:
     id_instance: str = ""
     api_token: str = ""
-    api_url: str = "https://api.green-api.com"
+    api_url: str = ""        # пусто → авто: https://{первые-4-цифры}.api.green-api.com
     group_id: str = ""
     delay: float = 1.5
     appearance: str = "System"
