@@ -32,8 +32,9 @@ class App(ctk.CTk):
         self.geometry("1180x760")
         self.minsize(1040, 680)
 
-        self.state = AppState(settings=load_settings())
-        ctk.set_appearance_mode(self.state.settings.appearance)
+        # NB: `self.state` нельзя — это имя занято методом tk.Tk.state()
+        self.app_state = AppState(settings=load_settings())
+        ctk.set_appearance_mode(self.app_state.settings.appearance)
         ctk.set_default_color_theme("blue")
 
         self.configure(fg_color=T.BG_PAGE)
@@ -119,7 +120,7 @@ class App(ctk.CTk):
             command=self._set_appearance,
             font=T.typography.caption_bold(),
         )
-        appearance.set(self.state.settings.appearance)
+        appearance.set(self.app_state.settings.appearance)
         appearance.grid(row=1, column=0, sticky="ew")
 
     def _build_content(self) -> None:
@@ -155,7 +156,7 @@ class App(ctk.CTk):
         cls = [WelcomeView, ConnectionView, GroupView, UsersView, SendView][index]
         return cls(
             self.content,
-            state=self.state,
+            state=self.app_state,
             go_next=self._next,
             go_back=self._back,
             persist=self._persist,
@@ -189,8 +190,8 @@ class App(ctk.CTk):
 
     def _set_appearance(self, value: str) -> None:
         ctk.set_appearance_mode(value)
-        self.state.settings.appearance = value
+        self.app_state.settings.appearance = value
         self._persist()
 
     def _persist(self) -> None:
-        save_settings(self.state.settings)
+        save_settings(self.app_state.settings)
