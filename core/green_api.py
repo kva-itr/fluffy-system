@@ -115,7 +115,7 @@ class GreenApiClient:
         return self._get("getStateInstance")
 
     def get_group_data(self, group_id: str) -> dict:
-        return self._post("getGroupData", {"groupId": normalize_group_id(group_id)})
+        return self._post("getGroupData", {"chatId": normalize_group_id(group_id)})
 
     def check_account(self, phone: str) -> dict:
         """`phoneNumber` отправляется целым числом, как в доке Green-API."""
