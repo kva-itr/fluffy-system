@@ -193,9 +193,10 @@ class GroupView(BaseView):
                     self._set_status("success", "данные получены"),
                 ))
             except Exception as e:
-                self.after(0, lambda: (
+                err = str(e)
+                self.after(0, lambda err=err: (
                     self._set_status("danger", "ошибка"),
-                    messagebox.showerror("Ошибка", str(e)),
+                    messagebox.showerror("Ошибка", err),
                 ))
 
         threading.Thread(target=task, daemon=True).start()
