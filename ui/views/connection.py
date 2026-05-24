@@ -50,9 +50,15 @@ class ConnectionView(BaseView):
         self.f_token.grid(row=0, column=1, sticky="ew", padx=(T.SP_3, 0), pady=(0, T.SP_4))
         self.f_token.set(s.api_token)
 
-        self.f_url = FieldRow(grid, "API URL",
-                              "https://api.green-api.com",
-                              hint="Базовый адрес API. Меняйте только если используете прокси.")
+        self.f_url = FieldRow(
+            grid, "API URL (необязательно)",
+            "авто: https://{xxxx}.api.green-api.com",
+            hint=(
+                "Можно оставить пустым — хост подставится по первым 4 цифрам "
+                "ID инстанса. Заполняйте, только если личный кабинет показывает "
+                "другой адрес."
+            ),
+        )
         self.f_url.grid(row=1, column=0, sticky="ew", padx=(0, T.SP_3))
         self.f_url.set(s.api_url)
 
@@ -93,7 +99,7 @@ class ConnectionView(BaseView):
         s = self.state.settings
         s.id_instance = self.f_id.get()
         s.api_token = self.f_token.get()
-        s.api_url = self.f_url.get() or "https://api.green-api.com"
+        s.api_url = self.f_url.get()  # пусто допустимо — авто-хост
         try:
             s.delay = float(self.f_delay.get().replace(",", "."))
         except ValueError:
