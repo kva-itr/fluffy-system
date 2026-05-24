@@ -147,7 +147,7 @@ class GreenApiClient:
             raise GreenApiError("Не указан ни phone, ни participant_chat_id")
 
         payload = {
-            "groupId": normalize_group_id(group_id),
+            "chatId": normalize_group_id(group_id),
             "participantChatId": chat_id,
         }
         return self._post("addGroupParticipant", payload)
