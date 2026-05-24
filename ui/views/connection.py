@@ -135,7 +135,8 @@ class ConnectionView(BaseView):
                     f"Состояние: {state_value}",
                 ))
             except Exception as e:
-                self.after(0, lambda: self._set_status("danger", str(e)))
+                err = str(e)
+                self.after(0, lambda err=err: self._set_status("danger", err))
 
         threading.Thread(target=task, daemon=True).start()
 
