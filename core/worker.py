@@ -99,13 +99,40 @@ class InviteWorker:
                     chat_id_hint = _extract_chat_id(check)
 
                 self._emit(InviteEvent(kind="user", index=i, status="sending"))
-                result = client.add_group_participant(
-                    self.group_id,
-                    phone=user.phone,
-                    participant_chat_id=chat_id_hint,
-                )
+                try:
+                    result = client.add_group_participant(
+                        self.group_id,
+                        phone=user.phone,
+                        participant_chat_id=chat_id_hint,
+                    )
+                except GreenApiError as e:
+                    if _is_already_in_group(e):
+                        skipped += 1
+                        self._emit(InviteEvent(kind="user", index=i, status="skipped",
+                                               message="уже в группе"))
+                        self._emit(InviteEvent(
+                            kind="log",
+                            message=f"[{i+1}/{total}] {user.name} · {phone_digits} — уже состоит в группе.",
+                        ))
+                        self._emit(InviteEvent(kind="progress", done=i + 1, total=total))
+                        if i + 1 < total and not self.stop_flag.is_set():
+                            time.sleep(self.delay)
+                        continue
+                    raise
                 added = result.get("addParticipant", result.get("result", True))
                 if added is False:
+                    if _is_already_in_group(result):
+                        skipped += 1
+                        self._emit(InviteEvent(kind="user", index=i, status="skipped",
+                                               message="уже в группе"))
+                        self._emit(InviteEvent(
+                            kind="log",
+                            message=f"[{i+1}/{total}] {user.name} · {phone_digits} — уже состоит в группе.",
+                        ))
+                        self._emit(InviteEvent(kind="progress", done=i + 1, total=total))
+                        if i + 1 < total and not self.stop_flag.is_set():
+                            time.sleep(self.delay)
+                        continue
                     raise GreenApiError(f"API вернул отказ: {result}")
                 ok += 1
                 self._emit(InviteEvent(kind="user", index=i, status="ok"))
@@ -139,10 +166,28 @@ def _account_exists(response: dict) -> bool:
     """
     if not isinstance(response, dict):
         return False
-    for key in ("existsMax", "existsWhatsapp", "exists", "ok", "result"):
+    for key in ("existsMax", "existsWhatsapp", "exists", "exist", "ok", "result"):
         if key in response:
             return bool(response[key])
     return False
+
+
+def _is_already_in_group(response_or_error) -> bool:
+    """Эвристика: API сообщил, что участник уже состоит в группе."""
+    text = ""
+    if isinstance(response_or_error, dict):
+        text = " ".join(str(v) for v in response_or_error.values())
+    else:
+        text = str(response_or_error)
+    t = text.lower()
+    markers = (
+        "already",
+        "participant exists",
+        "is a participant",
+        "already in",
+        "уже",
+    )
+    return any(m in t for m in markers)
 
 
 def _extract_chat_id(response: dict) -> str | None:
