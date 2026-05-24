@@ -1,13 +1,4 @@
-"""Чтение списка пользователей из Excel-файла.
-
-Ожидаемый формат (первый лист):
-    | Имя         | Телефон       |
-    | Иван Иванов | +7 900 123-45-67 |
-    | ...         | ...           |
-
-Заголовок необязателен — модуль автоматически определит, есть ли он, и
-выберет колонку с телефонами по содержимому, если названия отличаются.
-"""
+"""Чтение Excel-файла со списком получателей и генерация шаблона."""
 
 from __future__ import annotations
 
@@ -15,44 +6,41 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from openpyxl import load_workbook, Workbook
-
-
-@dataclass
-class UserRow:
-    name: str
-    phone: str
-    row_index: int  # 1-based, для отчётности
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
 
 PHONE_HEADERS = {"телефон", "phone", "номер", "msisdn", "tel", "mobile", "мобильный"}
 NAME_HEADERS = {"имя", "name", "фио", "пользователь", "user", "fullname", "full name"}
 
 
+@dataclass
+class UserRow:
+    name: str
+    phone: str
+    row_index: int  # 1-based для отчётов
+
+
 def _looks_like_phone(value: object) -> bool:
     if value is None:
         return False
-    s = str(value)
-    digits = sum(ch.isdigit() for ch in s)
-    return digits >= 7
+    return sum(ch.isdigit() for ch in str(value)) >= 7
 
 
 def load_users(path: str | Path) -> List[UserRow]:
     wb = load_workbook(filename=str(path), data_only=True, read_only=True)
     ws = wb.active
-
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return []
 
-    # Определяем индексы колонок
     header = rows[0]
     name_idx: Optional[int] = None
     phone_idx: Optional[int] = None
 
     header_is_text = all(
-        (cell is None) or isinstance(cell, str) for cell in header
-    ) and any(isinstance(cell, str) and cell.strip() for cell in header)
+        cell is None or isinstance(cell, str) for cell in header
+    ) and any(isinstance(c, str) and c.strip() for c in header)
 
     if header_is_text:
         for i, cell in enumerate(header):
@@ -67,9 +55,7 @@ def load_users(path: str | Path) -> List[UserRow]:
     else:
         data_rows = rows
 
-    # Если не определили — пытаемся понять по содержимому
     if phone_idx is None:
-        # Берём первую непустую строку и ищем колонку, похожую на телефон
         for r in data_rows:
             for i, cell in enumerate(r):
                 if _looks_like_phone(cell):
@@ -82,7 +68,6 @@ def load_users(path: str | Path) -> List[UserRow]:
         raise ValueError("В файле не найдена колонка с номерами телефонов")
 
     if name_idx is None:
-        # Возьмём первую текстовую колонку, отличную от phone_idx
         for r in data_rows:
             for i, cell in enumerate(r):
                 if i == phone_idx:
@@ -93,7 +78,7 @@ def load_users(path: str | Path) -> List[UserRow]:
             if name_idx is not None:
                 break
 
-    users: List[UserRow] = []
+    out: List[UserRow] = []
     start_row = 2 if header_is_text else 1
     for offset, r in enumerate(data_rows):
         phone = r[phone_idx] if phone_idx < len(r) else None
@@ -102,23 +87,38 @@ def load_users(path: str | Path) -> List[UserRow]:
         name = ""
         if name_idx is not None and name_idx < len(r) and r[name_idx] is not None:
             name = str(r[name_idx]).strip()
-        users.append(
+        out.append(
             UserRow(
                 name=name or "(без имени)",
                 phone=str(phone).strip(),
                 row_index=start_row + offset,
             )
         )
-    return users
+    return out
 
 
 def write_sample(path: str | Path) -> None:
-    """Создать пример Excel-файла со списком пользователей."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Пользователи"
+
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    header_fill = PatternFill("solid", fgColor="0A84FF")
+    center = Alignment(horizontal="left", vertical="center")
+
     ws.append(["Имя", "Телефон"])
+    for col in ("A1", "B1"):
+        c = ws[col]
+        c.font = header_font
+        c.fill = header_fill
+        c.alignment = center
+
     ws.append(["Иван Иванов", "+7 900 123-45-67"])
     ws.append(["Мария Петрова", "79161234567"])
     ws.append(["Алексей Сидоров", "8 (905) 555-12-34"])
+
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 22
+    ws.row_dimensions[1].height = 24
+
     wb.save(str(path))
