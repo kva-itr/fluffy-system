@@ -25,10 +25,12 @@ from ._base import BaseView
 
 
 STATUS_MAP = {
-    "pending":  ("ожидает",  "neutral"),
-    "sending":  ("отправка", "accent"),
-    "ok":       ("добавлен", "success"),
-    "error":    ("ошибка",   "danger"),
+    "pending":  ("ожидает",     "neutral"),
+    "checking": ("проверка",    "accent"),
+    "sending":  ("отправка",    "accent"),
+    "ok":       ("добавлен",    "success"),
+    "skipped":  ("нет MAX",     "warn"),
+    "error":    ("ошибка",      "danger"),
 }
 
 
@@ -43,11 +45,35 @@ class SendView(BaseView):
 
         # Сводка
         summary = self._build_summary()
-        summary.grid(row=1, column=0, sticky="ew", pady=(T.SP_2, T.SP_5))
+        summary.grid(row=1, column=0, sticky="ew", pady=(T.SP_2, T.SP_4))
+
+        # Опции рассылки
+        options = ctk.CTkFrame(self.body, fg_color="transparent")
+        options.grid(row=2, column=0, sticky="ew", pady=(0, T.SP_4))
+        options.grid_columnconfigure(0, weight=1)
+
+        self.check_account_switch = ctk.CTkSwitch(
+            options,
+            text="Проверять checkAccount перед добавлением",
+            font=T.typography.caption_bold(),
+            text_color=T.TEXT_PRIMARY,
+            command=self._on_toggle_check,
+        )
+        if self.state.settings.check_account:
+            self.check_account_switch.select()
+        self.check_account_switch.grid(row=0, column=0, sticky="w")
+
+        ctk.CTkLabel(
+            options,
+            text="Если включено — каждый номер сперва проверяется методом checkAccount, "
+                 "и при отсутствии аккаунта MAX строка помечается «нет MAX» и пропускается.",
+            font=T.typography.small(), text_color=T.TEXT_TERTIARY,
+            anchor="w", justify="left", wraplength=720,
+        ).grid(row=1, column=0, sticky="ew", pady=(2, 0))
 
         # Полоса прогресса
         progress_card = ctk.CTkFrame(self.body, fg_color="transparent")
-        progress_card.grid(row=2, column=0, sticky="ew", pady=(0, T.SP_4))
+        progress_card.grid(row=3, column=0, sticky="ew", pady=(0, T.SP_4))
         progress_card.grid_columnconfigure(0, weight=1)
 
         self.progress = ctk.CTkProgressBar(
@@ -66,11 +92,11 @@ class SendView(BaseView):
 
         # Содержимое: список + журнал
         cols = ctk.CTkFrame(self.body, fg_color="transparent")
-        cols.grid(row=3, column=0, sticky="nsew")
+        cols.grid(row=4, column=0, sticky="nsew")
         cols.grid_columnconfigure(0, weight=3, uniform="cols")
         cols.grid_columnconfigure(1, weight=2, uniform="cols")
         cols.grid_rowconfigure(0, weight=1)
-        self.body.grid_rowconfigure(3, weight=1)
+        self.body.grid_rowconfigure(4, weight=1)
 
         # — Список получателей со статусами
         list_card = InsetSurface(cols)
@@ -212,6 +238,10 @@ class SendView(BaseView):
 
     # ---------- handlers ----------
 
+    def _on_toggle_check(self) -> None:
+        self.state.settings.check_account = bool(self.check_account_switch.get())
+        self.persist()
+
     def on_start(self) -> None:
         if not self.state.users:
             messagebox.showwarning("Внимание",
@@ -234,6 +264,7 @@ class SendView(BaseView):
             group_id=s.group_id,
             users=self.state.users,
             delay=s.delay,
+            check_account=s.check_account,
         )
         self.worker.start()
 
@@ -274,8 +305,14 @@ class SendView(BaseView):
         elif ev.kind == "done":
             self.btn_start.configure(state="normal")
             self.btn_stop.configure(state="disabled")
-            self._log(f"✅ Готово. Успешно: {ev.ok}, ошибок: {ev.fail}.")
+            self._log(
+                f"✅ Готово. Успешно: {ev.ok}, ошибок: {ev.fail}, "
+                f"пропущено: {ev.skipped}."
+            )
             messagebox.showinfo(
                 "Готово",
-                f"Рассылка завершена.\n\nУспешно: {ev.ok}\nОшибок: {ev.fail}",
+                "Рассылка завершена.\n\n"
+                f"Успешно:   {ev.ok}\n"
+                f"Ошибок:    {ev.fail}\n"
+                f"Пропущено: {ev.skipped}",
             )

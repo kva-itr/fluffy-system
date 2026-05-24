@@ -18,6 +18,7 @@ class Settings:
     delay: float = 1.5
     appearance: str = "System"
     accent: str = "blue"
+    check_account: bool = True   # перед добавлением вызывать checkAccount
 
 
 def load_settings() -> Settings:
